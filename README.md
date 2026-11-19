@@ -5,3 +5,4 @@
 
 我已经学会了使用git add 和git commit.
 我已经成功把本地项目上传到了 GitHub。
+这句话是在 GitHub 网页上添加的。
