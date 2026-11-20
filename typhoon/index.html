@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>台风观察 · 浙江台风路径</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1421;--panel:#142235;--line:#2c4158;--text:#eef6ff;--muted:#b0c4d8;--teal:#58e1ce}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,sans-serif}
+header{border-bottom:1px solid var(--line);padding:18px max(5vw,20px);font-weight:750;letter-spacing:.08em}header span{color:var(--teal)}
+main{max-width:1240px;margin:auto;padding:26px clamp(16px,4vw,48px) 50px}
+.notice{background:#312915;color:#ffe2a0;border:1px solid #775d26;border-radius:10px;padding:10px 16px;font-weight:700}
+.intro{display:flex;align-items:end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:22px 0 20px}
+h1{font-size:clamp(30px,5vw,52px);line-height:1.15;margin:0}h2{font-size:20px;margin:0 0 14px}p{margin:8px 0}
+.muted,dt,figcaption{color:var(--muted)}select{background:var(--panel);color:var(--text);border:1px solid #647b92;border-radius:8px;padding:9px;font:inherit}
+[hidden]{display:none!important}.layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;min-width:0}
+.warning{margin-bottom:16px;border-left:4px solid var(--alert,#ffae66)}.warning strong{color:var(--alert,#ffae66);font-size:1.2rem}
+figure{margin:0}canvas{display:block;width:100%;height:clamp(260px,36vw,420px);border-radius:10px;background:#0e2336}
+figcaption{font-size:.88rem;margin-top:10px}.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:.9rem}.past{color:var(--teal)}.future{color:#ffc785}
+dl{margin:0}dl div{padding:10px 0;border-top:1px solid var(--line)}dd{margin:0;font-size:1.12rem;font-weight:680}dt{font-size:.85rem}
+details{margin-top:14px}summary{cursor:pointer}ol{padding-left:22px}
+@media(max-width:740px){[hidden]{display:none!important}.layout{grid-template-columns:1fr}.facts{grid-row:1}.panel{padding:15px}}
+</style>
+</head>
+<body>
+<header><span aria-hidden="true">◉</span> 台风观察</header>
+<main>
+<div class="notice" id="status" role="status">等待浙江省水利厅数据快照。</div>
+<div class="intro">
+<div><h1>台风实况与预警</h1><p class="muted"><a style="color:inherit" href="https://typhoon.slt.zj.gov.cn/">浙江省水利厅 · 台风路径实时发布系统</a></p></div>
+<label id="selection" for="storm" hidden>选择台风 <select id="storm"></select></label>
+</div>
+<section class="panel warning" id="warning" aria-labelledby="warning-title">
+<h2 id="warning-title">地区预警</h2>
+<p>路径数据源未提供市县预警报文。请查询<a style="color:inherit" href="https://www.12379.cn/">国家预警信息发布中心</a>或当地气象台。</p>
+</section>
+<div class="layout" id="dashboard" hidden>
+<section class="panel" aria-labelledby="track-title">
+<h2 id="track-title">台风路径示意</h2>
+<figure>
+<canvas id="map" role="img" aria-label="台风经纬度路径图，详细坐标见下方路径点。">请查看下方路径点。</canvas>
+<figcaption>经纬度路径示意</figcaption>
+</figure>
+<div class="legend"><span class="past">● 观测路径</span><span>◎ 最新观测点</span><span class="future">┄ 预报路径</span></div>
+<details><summary>查看路径点及时间（北京时间）</summary><ol id="points"></ol></details>
+</section>
+<section class="panel facts" aria-labelledby="facts-title">
+<h2 id="facts-title">实况数据面板</h2>
+<dl>
+<div><dt>台风名称</dt><dd id="name"></dd></div>
+<div><dt>观测时间（北京时间）</dt><dd id="observed"></dd></div><div><dt>最新观测位置</dt><dd id="position"></dd></div>
+<div><dt>移动方向与速度</dt><dd id="movement"></dd></div>
+<div><dt>中心附近最大风力</dt><dd id="wind"></dd></div>
+</dl>
+</section>
+</div>
+</main>
+<script type="application/json" id="snapshot">null</script>
+<script>
+const snapshot = JSON.parse(document.getElementById('snapshot').textContent);
+const select = document.getElementById('storm');
+let track = [];
+let current = 0;
+
+function coordinates(point) {
+  return (point.lat < 0 ? '南纬 ' : '北纬 ') + Math.abs(point.lat).toFixed(2) + '° · ' +
+    (point.lon < 0 ? '西经 ' : '东经 ') + Math.abs(point.lon).toFixed(2) + '°';
+}
+
+function renderStorm(storm) {
+  track = [...storm.observed, ...storm.predicted];
+  current = storm.observed.length - 1;
+  document.getElementById('name').textContent = storm.name + ' · ' + storm.id + (storm.active ? '' : '（历史）');
+  document.getElementById('observed').textContent = track[current].time;
+  document.getElementById('position').textContent = coordinates(track[current]);
+  const field = (value, unit) => value == null || String(value).trim() === '' ? '暂无数据' : value + unit;
+  document.getElementById('movement').textContent = field(storm.direction, '') + ' · ' + field(storm.movement, ' 公里/小时');
+  document.getElementById('wind').textContent = field(storm.power, ' 级') + ' · ' + field(storm.wind, ' 米/秒');
+  document.querySelector('figcaption').textContent = storm.agency ? '经纬度示意 · 预报来源：' + storm.agency : '经纬度示意 · 该观测时次暂无后续预报';
+  const items = track.map((point, index) => {
+    const item = document.createElement('li');
+    const kind = index < current ? '观测' : index === current ? '最新观测' : '预报';
+    item.textContent = kind + ' · ' + point.time + ' · ' + coordinates(point);
+    return item;
+  });
+  document.getElementById('points').replaceChildren(...items);
+  if (ctx) drawMap();
+}
+
+const map = document.getElementById('map');
+const ctx = map.getContext('2d');
+function drawMap() {
+  const width = map.clientWidth;
+  const height = map.clientHeight;
+  const scale = window.devicePixelRatio || 1;
+  map.width = width * scale;
+  map.height = height * scale;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  const lons = track.map(point => point.lon);
+  const lats = track.map(point => point.lat);
+  const west = Math.floor(Math.min(...lons)) - 1;
+  const east = Math.ceil(Math.max(...lons)) + 1;
+  const south = Math.floor(Math.min(...lats)) - 1;
+  const north = Math.ceil(Math.max(...lats)) + 1;
+  const x = lon => 43 + (lon - west) / (east - west) * (width - 68);
+  const y = lat => 16 + (north - lat) / (north - south) * (height - 42);
+  function trace(points) {
+    ctx.beginPath();
+    points.forEach(([lon, lat], index) => {
+      if (index === 0) ctx.moveTo(x(lon), y(lat));
+      else ctx.lineTo(x(lon), y(lat));
+    });
+  }
+  ctx.font = '11px system-ui';
+  for (let tick = 0; tick <= 4; tick++) {
+    const lon = west + (east - west) * tick / 4;
+    const lat = south + (north - south) * tick / 4;
+    ctx.strokeStyle = '#2c4158';
+    trace([[lon, south], [lon, north]]);
+    ctx.stroke();
+    trace([[west, lat], [east, lat]]);
+    ctx.stroke();
+    ctx.fillStyle = '#b0c4d8';
+    ctx.fillText(Math.abs(lon).toFixed(1) + (lon < 0 ? '°W' : '°E'), x(lon) - 16, height - 6);
+    ctx.fillText(Math.abs(lat).toFixed(1) + (lat < 0 ? '°S' : '°N'), 4, y(lat) + 4);
+  }
+  const route = track.map(({lon,lat}) => [lon,lat]);
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#58e1ce';
+  trace(route.slice(0,current + 1));
+  ctx.stroke();
+  ctx.setLineDash([6,5]);
+  ctx.strokeStyle = '#ffc785';
+  trace(route.slice(current));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  track.forEach(({lon,lat}, index) => {
+    ctx.beginPath();
+    ctx.arc(x(lon), y(lat), index === current ? 8 : 4, 0, Math.PI * 2);
+    ctx.fillStyle = index > current ? '#ffc785' : '#58e1ce';
+    ctx.fill();
+    if (index === current) {
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+    }
+  });
+}
+if (snapshot) {
+  const active = snapshot.storms.some(storm => storm.active);
+  const synced = new Date(snapshot.synced);
+  const time = synced.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+  const expired = Date.now() - synced.getTime() > 45 * 60 * 1000;
+  const summary = expired ? '数据更新延迟 · 请到官方来源确认' : active ? '数据已同步' :
+    snapshot.storms.length ? '同步时无活跃台风 · 下方展示历史路径' : '同步时无活跃台风';
+  document.getElementById('status').textContent = summary + ' · 最近同步 ' + time + '（北京时间）';
+  if (snapshot.storms.length) {
+    for (const storm of snapshot.storms) select.add(new Option(storm.name + ' · ' + storm.id, storm.id));
+    document.getElementById('dashboard').hidden = false;
+    document.getElementById('selection').hidden = snapshot.storms.length < 2;
+    select.addEventListener('change', () => renderStorm(snapshot.storms.find(storm => storm.id === select.value)));
+    renderStorm(snapshot.storms[0]);
+    if (ctx) window.addEventListener('resize', drawMap);
+  }
+}
+</script>
+</body>
+</html>
