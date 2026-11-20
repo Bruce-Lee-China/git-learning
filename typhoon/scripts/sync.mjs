@@ -18,6 +18,11 @@ function point(raw) {
   return { lon, lat, time: raw.time };
 }
 
+function largestRadius(value) {
+  const radii = String(value ?? '').split('|').map(Number).filter(radius => Number.isFinite(radius) && radius > 0);
+  return radii.length ? Math.max(...radii) : null;
+}
+
 const list = await request('TyphoonList/' + year);
 if (!Array.isArray(list) || list.some(row => !/^\d{6,8}$/.test(row?.tfid) ||
     !['0', '1'].includes(String(row.isactive)))) {
@@ -43,7 +48,8 @@ for (const row of selected) {
     id: String(row.tfid), name: detail.name || row.name,
     active: String(row.isactive) === '1', observed: observed.map(point), predicted,
     agency: predicted.length ? forecast.tm : null, direction: last.movedirection,
-    movement: last.movespeed, power: last.power, wind: last.speed
+    movement: last.movespeed, power: last.power, wind: last.speed,
+    pressure: last.pressure, radius7: largestRadius(last.radius7), radius10: largestRadius(last.radius10)
   });
 }
 
